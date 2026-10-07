@@ -14,9 +14,20 @@ It supports filtering files using `--include` and `--exclude`, resuming interrup
 - **Fetch Release Assets**: Retrieve a list of files/assets for a GitHub repository release.
 - **Download Files**: Optionally download the files to a specified directory.
 - **Filter Files**: Use `--include` to download only specific files or `--exclude` to skip certain files.
-- **Resume Downloads**: Supports resuming interrupted downloads.
+- **Resume Downloads**: Supports resuming interrupted downloads — only when the remote file is confirmed unchanged (see below).
+- **Replaced-Asset Detection**: If a maintainer updates/replaces an asset under the same release tag (common with rolling "nightly" releases), the old local copy is discarded and the new file is downloaded fresh. Previously this was either silently skipped (same-size replacement) or blind-appended via resume, producing a corrupt file.
 - **File Size Verification**: Compares downloaded file sizes with the release manifest to help ensure integrity.
 - **Human-Readable Output**: Displays file sizes in a human-readable format (e.g., KB, MB, GB).
+
+### How updated/replace assets are detected
+
+GitHub's release API reports each asset's `id` and `updated_at`. grf records these per asset in a `.grf-cache.json` file written next to the downloads. On a later run:
+
+- Same asset id + same `updated_at` + matching size → the file is genuinely unchanged and gets skipped.
+- Anything else (asset edited in place, deleted and re-uploaded, etc.) → the existing copy is replaced wholesale with a fresh download.
+- Resume (`Range` requests) is only used for known-unchanged files, and the response's `Content-Range` header is verified before appending, so a server that ignores the range can no longer splice bytes onto an existing copy.
+
+Keep `.grf-cache.json` alongside the downloaded files; if it is missing, existing copies cannot be trusted and are re-downloaded fresh.
 
 ---
 
@@ -54,6 +65,9 @@ It supports filtering files using `--include` and `--exclude`, resuming interrup
 
 #### Exclude Specific Files:
 `python3 grf.py https://github.com/owner/repo --download --exclude file1.zip file2.zip`
+
+#### Force Re-download (discard existing local copies):
+`python3 grf.py https://github.com/owner/repo --download --force`
 
 #### Show Version:
 `python3 grf.py --version`
